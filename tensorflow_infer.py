@@ -2,7 +2,7 @@
 import cv2
 import time
 import argparse
-
+import os
 import numpy as np
 from PIL import Image
 #from keras.models import model_from_json
@@ -10,24 +10,10 @@ from utils.anchor_generator import generate_anchors
 from utils.anchor_decode import decode_bbox
 from utils.nms import single_class_non_max_suppression
 from load_model.tensorflow_loader import load_tf_model, tf_inference
-
-sess, graph = load_tf_model('models/face_mask_detection.pb')
-# anchor configuration
-feature_map_sizes = [[33, 33], [17, 17], [9, 9], [5, 5], [3, 3]]
-anchor_sizes = [[0.04, 0.056], [0.08, 0.11], [0.16, 0.22], [0.32, 0.45], [0.64, 0.72]]
-anchor_ratios = [[1, 0.62, 0.42]] * 5
-
-# generate anchors
-anchors = generate_anchors(feature_map_sizes, anchor_sizes, anchor_ratios)
-
-# for inference , the batch size is 1, the model output shape is [1, N, 4],
-# so we expand dim for anchors to [1, anchor_num, 4]
-anchors_exp = np.expand_dims(anchors, axis=0)
-
-id2class = {0: 'Mask', 1: 'NoMask'}
+from evaluation.file_tools import parse_rec, find_xml_files
 
 
-def inference(image,
+def inference(image,id2class,anchors_exp,sess, graph,
               conf_thresh=0.5,
               iou_thresh=0.4,
               target_shape=(160, 160),
@@ -87,7 +73,8 @@ def inference(image,
         output_info.append([class_id, conf, xmin, ymin, xmax, ymax])
 
     if show_result:
-        Image.fromarray(image).show()
+        im = Image.fromarray(image)
+        im.save("/home/hossein/your_file.jpeg")
     return output_info
 
 
@@ -132,12 +119,21 @@ def run_on_video(video_path, output_video_name, conf_thresh):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Face Mask Detection")
     parser.add_argument('--img-mode', type=int, default=1, help='set 1 to run on image, 0 to run on video.')
-    parser.add_argument('--img-path', type=str, help='path to your image.')
+    parser.add_argument('--img-path', type=str, default='./img/eval/test_00002111.xml')
     parser.add_argument('--video-path', type=str, default='0', help='path to your video, `0` means to use camera.')
     # parser.add_argument('--hdf5', type=str, help='keras hdf5 file')
+    parser.add_argument('-o', '--output_path', default=os.path.expanduser('~') + '/results',
+                        help='output path for files produced by the agent')
     args = parser.parse_args()
+
+    current_time = (str(datetime.datetime.now()).replace(" ", "#")).replace(":", "-")
+    output_path = os.path.expanduser('~') + '/results_NIPS' + args.output_path
+    file_path_results = output_path + "/" + current_time
+    File_Manager.set_file_path(file_path_results)
     if args.img_mode:
         imgPath = args.img_path
+        find_xml_files("./img/eval")
+        parse_rec(imgPath)
         img = cv2.imread(imgPath)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         inference(img, show_result=True, target_shape=(260, 260))
